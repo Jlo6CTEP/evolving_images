@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import numpy
 
-from numpy import argwhere, zeros, uint8, full, arange, concatenate, empty, ndarray, array, clip, int32, int8
+from numpy import argwhere, zeros, uint8, full, arange, concatenate, empty, ndarray, array, clip, int32, int8, insert
 from numpy.random import exponential, randint, normal, choice
 from scipy.spatial import Delaunay
 from scipy.spatial import distance
@@ -103,9 +103,43 @@ def draw_square(mesh, triangles, colors):
     return square
 
 
-def crossover(ind_one, ind_two):
+def crossover(ind_one, ind_two, src):
     child_one = deepcopy(ind_one)
     child_two = deepcopy(ind_two)
+
+    crossover_mode = int(clip(int(exponential(1 / MODE_LAMBDA)), 0, 3))
+    crossover_intensity = int(clip(int(exponential(1 / INTENSITY_LAMBDA) * 2), 1, 4))
+    print("crossover mode is {}".format(crossover_mode))
+    if crossover_mode == 0:
+        exchange_colors(child_one, child_two, crossover_intensity)
+    elif crossover_mode == 1:
+        exchange_points(child_one, child_two, src, crossover_intensity)
+    else:
+        exchange_colors(child_one, child_two, crossover_intensity)
+        exchange_points(child_one, child_two, src, crossover_intensity)
+    child_one[3] = evaluate_fitness(child_one, src)
+    child_two[3] = evaluate_fitness(child_two, src)
+
+    return child_one, child_two
+
+
+def exchange_colors(ind_one, ind_two, crossover_intensity):
+    loci = choice(arange(min(len(ind_one[0]), len(ind_two))), size=crossover_intensity)
+    ind_one[2][loci], ind_two[2][loci] = ind_two[2][loci], ind_one[2][loci]
+
+
+def exchange_points(ind_one, ind_two, src, crossover_intensity):
+    shorter, longer = (ind_one[0], ind_two[0]) if len(ind_one[0]) < len(ind_two[0]) else (ind_two[0], ind_one[0])
+    shorter = concatenate([empty([len(longer) - len(shorter), 2], dtype=ndarray), shorter])
+    loci = choice(len(shorter), crossover_intensity, replace=False)
+    shorter[loci], longer[loci] = longer[loci], shorter[loci]
+    shorter = shorter[shorter != array([None, None])]
+    ind_one[1] = triangulate(ind_one[0])
+    ind_one[2] = calculate_colors(ind_one[0], ind_one[1], src, zeros([3]))
+
+    ind_two[1] = triangulate(ind_two[0])
+    ind_two[2] = calculate_colors(ind_two[0], ind_two[1], src, zeros([3]))
+
 
 
 def mutation(ind, src):
@@ -136,15 +170,15 @@ def mutation(ind, src):
 
 
 def mutate_colors(ind, mutation_intensity):
-    rand_index = choice(len(ind[2]) - 1, mutation_intensity, False)
-    ind[2][rand_index] = ind[2][rand_index] + \
+    loci = choice(len(ind[2]) - 1, mutation_intensity, False)
+    ind[2][loci] = ind[2][loci] + \
         ndarray.astype(clip((normal(0, 1, [mutation_intensity, 3]) * 2), -COLOR_DRIFT, COLOR_DRIFT), dtype=int8)
     clip(ind[2], 0, 255)
 
 
 def mutate_point_position(ind, mutation_intensity, src):
-    rand_index = choice(len(ind[0]) - 1, mutation_intensity, False)
-    ind[0][rand_index] = ind[0][rand_index] + \
+    loci = choice(len(ind[0]) - 1, mutation_intensity, False)
+    ind[0][loci] = ind[0][loci] + \
         ndarray.astype(clip((normal(0, 2, [mutation_intensity, 2]) * 2), -POINT_DRIFT, POINT_DRIFT), dtype=int8)
     ind[1] = triangulate(ind[0])
     ind[2] = calculate_colors(ind[0], ind[1], src, zeros([3]))
@@ -153,8 +187,8 @@ def mutate_point_position(ind, mutation_intensity, src):
 def del_add_mutation(ind, mutation_intensity, src):
     is_del = randint(0, 2)
     if is_del == 1:
-        rand_index = choice(len(ind[0] - 5), len(ind[0]) - mutation_intensity, False)
-        ind[0] = ind[0][rand_index]
+        loci = choice(len(ind[0] - 5), len(ind[0]) - mutation_intensity, False)
+        ind[0] = ind[0][loci]
     else:
         ind[0] = concatenate([randint(0, F_SIZE, [mutation_intensity, 2]), ind[0]])
     ind[1] = triangulate(ind[0])
@@ -164,14 +198,14 @@ def del_add_mutation(ind, mutation_intensity, src):
 def approximate_square(source, mask):
     population = array(generate_population(source, mask))
     print(evaluate_fitness(population[3], source))
-    mutation(population[3], source)
-    mutation(population[4], source)
-    mutation(population[5], source)
-    mutation(population[6], source)
-    mutation(population[13], source)
-    mutation(population[14], source)
-    mutation(population[15], source)
-    mutation(population[16], source)
+    crossover(population[3], population[23], source)
+    crossover(population[4], population[24], source)
+    crossover(population[5], population[25], source)
+    crossover(population[6], population[26], source)
+    crossover(population[13], population[33], source)
+    crossover(population[14], population[34], source)
+    crossover(population[15], population[35], source)
+    crossover(population[16], population[36], source)
     print()
 
 
