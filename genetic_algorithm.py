@@ -3,14 +3,15 @@ from copy import deepcopy
 
 import numpy
 
-from numpy import argwhere, zeros, uint8, full, arange, concatenate, empty, ndarray, array, clip, int32, int8, insert
+from numpy import argwhere, zeros, uint8, full, arange, concatenate, empty, ndarray, array, clip, int32, int8, insert, \
+    argsort
 from numpy.random import exponential, randint, normal, choice
 from scipy.spatial import Delaunay
 from scipy.spatial import distance
 import cv2
 
 SIZE = 512
-POPULATION_SIZE = 200
+POPULATION_SIZE = 100
 F_SIZE = 64
 
 KERNEL_SIZE = 3
@@ -28,6 +29,9 @@ FITNESS_STEP = 2
 
 MODE_LAMBDA = 0.8
 INTENSITY_LAMBDA = 1.5
+
+CROSSOVER_COUNT = 10
+MUTATION_COUNT = 10
 
 BORDER_POINT_FACTOR = 1
 
@@ -96,7 +100,7 @@ def calculate_colors(mesh, triangles, src, drift):
     return colors
 
 
-def draw_square(mesh, triangles, colors):
+def draw_square(mesh, triangles, colors, fitness):
     square = empty([F_SIZE, F_SIZE, 3], dtype=uint8)
     for x in range(len(triangles)):
         cv2.drawContours(square, array([mesh[triangles[x]]]), -1, colors[x].tolist(), thickness=cv2.FILLED)
@@ -141,7 +145,6 @@ def exchange_points(ind_one, ind_two, src, crossover_intensity):
     ind_two[2] = calculate_colors(ind_two[0], ind_two[1], src, zeros([3]))
 
 
-
 def mutation(ind, src):
     mutation_mode = int(clip(int(exponential(1 / MODE_LAMBDA) * 2), 0, 6))
     mutation_intensity = int(clip(int(exponential(1 / INTENSITY_LAMBDA) * 2), 1, 4))
@@ -165,21 +168,22 @@ def mutation(ind, src):
         mutate_point_position(ind, mutation_intensity, src)
         mutate_colors(ind, mutation_intensity)
     ind[3] = evaluate_fitness(ind, src)
-    print(evaluate_fitness(ind, src))
     return ind
 
 
 def mutate_colors(ind, mutation_intensity):
     loci = choice(len(ind[2]) - 1, mutation_intensity, False)
     ind[2][loci] = ind[2][loci] + \
-        ndarray.astype(clip((normal(0, 1, [mutation_intensity, 3]) * 2), -COLOR_DRIFT, COLOR_DRIFT), dtype=int8)
+                   ndarray.astype(clip((normal(0, 1, [mutation_intensity, 3]) * 2), -COLOR_DRIFT, COLOR_DRIFT),
+                                  dtype=int8)
     clip(ind[2], 0, 255)
 
 
 def mutate_point_position(ind, mutation_intensity, src):
     loci = choice(len(ind[0]) - 1, mutation_intensity, False)
     ind[0][loci] = ind[0][loci] + \
-        ndarray.astype(clip((normal(0, 2, [mutation_intensity, 2]) * 2), -POINT_DRIFT, POINT_DRIFT), dtype=int8)
+                   ndarray.astype(clip((normal(0, 2, [mutation_intensity, 2]) * 2), -POINT_DRIFT, POINT_DRIFT),
+                                  dtype=int8)
     ind[1] = triangulate(ind[0])
     ind[2] = calculate_colors(ind[0], ind[1], src, zeros([3]))
 
@@ -197,21 +201,31 @@ def del_add_mutation(ind, mutation_intensity, src):
 
 def approximate_square(source, mask):
     population = array(generate_population(source, mask))
-    print(evaluate_fitness(population[3], source))
-    crossover(population[3], population[23], source)
-    crossover(population[4], population[24], source)
-    crossover(population[5], population[25], source)
-    crossover(population[6], population[26], source)
-    crossover(population[13], population[33], source)
-    crossover(population[14], population[34], source)
-    crossover(population[15], population[35], source)
-    crossover(population[16], population[36], source)
-    print()
+    population = population[argsort(population, 3)]
+    fitness = population[POPULATION_SIZE - 1][3]
+    while fitness > 30:
+        breeding = population[POPULATION_SIZE - CROSSOVER_COUNT, POPULATION_SIZE - 1]
+
+        for x in range(len(breeding) - 1, step=2):
+            breeding[x], breeding[x + 1] = crossover(breeding[x], breeding[x + 1], source)
+
+        population = concatenate([breeding, population])
+
+        mutating = choice(len(population) - 1, MUTATION_COUNT)
+
+        for x in range(len(mutating) - 1):
+            population[x] = mutation(population[x], source)
+
+        population = population[argsort(population, 3)]
+        population = population[len(population) - POPULATION_SIZE:]
+        fitness = population[POPULATION_SIZE - 1][3]
+    super_hero = population[POPULATION_SIZE - 1]
+    return draw_square(*super_hero)
 
 
 def evaluate_fitness(tgt, src):
     fit = 0
-    square = draw_square(tgt[0], tgt[1], tgt[2])
+    square = draw_square(*tgt)
     for x in range(0, F_SIZE, FITNESS_STEP):
         for y in range(0, F_SIZE, FITNESS_STEP):
             fit += abs(distance.euclidean(square[x, y], src[x, y]))
@@ -228,7 +242,8 @@ sobely = cv2.Sobel(gray, cv2.CV_8U, 1, 1, ksize=5)
 cv2.imshow('init', img)
 
 t1 = time.time()
-approximate_square(img[0:F_SIZE, 0:F_SIZE], laplacian[0:F_SIZE, 0:F_SIZE])
+f = approximate_square(img[0:F_SIZE, 0:F_SIZE], laplacian[0:F_SIZE, 0:F_SIZE])
+cv2.imshow("first_square", f)
 print(time.time() - t1)
 cv2.imshow('laplacian', laplacian)
 cv2.imshow('sobely', sobely)
