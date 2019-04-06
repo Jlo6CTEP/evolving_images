@@ -119,13 +119,14 @@ def crossover(ind_one, ind_two, src):
         exchange_points(child_one, child_two, src, crossover_intensity)
     child_one[3] = evaluate_fitness(child_one, src)
     child_two[3] = evaluate_fitness(child_two, src)
-
+    print(child_one[3])
+    print(child_two[3])
     return child_one, child_two
 
 
 def exchange_colors(ind_one, ind_two, crossover_intensity):
     loci = choice(arange(min(len(ind_one[0]), len(ind_two))), size=crossover_intensity)
-    ind_one[2][loci], ind_two[2][loci] = ind_two[2][loci], ind_one[2][loci]
+    ind_one[0][loci], ind_two[0][loci] = ind_two[0][loci], ind_one[0][loci]
 
 
 def exchange_points(ind_one, ind_two, src, crossover_intensity):
@@ -133,7 +134,12 @@ def exchange_points(ind_one, ind_two, src, crossover_intensity):
     shorter = concatenate([empty([len(longer) - len(shorter), 2], dtype=ndarray), shorter])
     loci = choice(len(shorter), crossover_intensity, replace=False)
     shorter[loci], longer[loci] = longer[loci], shorter[loci]
-    shorter = shorter[shorter != array([None, None])]
+    shorter = shorter[(shorter != array([None, None]))[:, 0]]
+    ind_one[0], ind_two[0] = (shorter, longer) if len(ind_one[0]) < len(ind_two[0]) else (longer, shorter)
+
+    ind_one[0] = ndarray.astype(ind_one[0], dtype=int32)
+    ind_two[0] = ndarray.astype(ind_one[0], dtype=int32)
+
     ind_one[1] = triangulate(ind_one[0])
     ind_one[2] = calculate_colors(ind_one[0], ind_one[1], src, zeros([3]))
 
@@ -141,32 +147,31 @@ def exchange_points(ind_one, ind_two, src, crossover_intensity):
     ind_two[2] = calculate_colors(ind_two[0], ind_two[1], src, zeros([3]))
 
 
-
 def mutation(ind, src):
+    mutated = deepcopy(ind)
     mutation_mode = int(clip(int(exponential(1 / MODE_LAMBDA) * 2), 0, 6))
     mutation_intensity = int(clip(int(exponential(1 / INTENSITY_LAMBDA) * 2), 1, 4))
     if mutation_mode == 0:
-        mutate_colors(ind, mutation_intensity)
+        mutate_colors(mutated, mutation_intensity)
     elif mutation_mode == 1:
-        mutate_point_position(ind, mutation_intensity, src)
+        mutate_point_position(mutated, mutation_intensity, src)
     elif mutation_mode == 2:
-        del_add_mutation(ind, mutation_intensity, src)
+        del_add_mutation(mutated, mutation_intensity, src)
     elif mutation_mode == 3:
-        mutate_point_position(ind, mutation_intensity, src)
-        mutate_colors(ind, mutation_intensity)
+        mutate_point_position(mutated, mutation_intensity, src)
+        mutate_colors(mutated, mutation_intensity)
     elif mutation_mode == 4:
-        del_add_mutation(ind, mutation_intensity, src)
-        mutate_colors(ind, mutation_intensity)
+        del_add_mutation(mutated, mutation_intensity, src)
+        mutate_colors(mutated, mutation_intensity)
     elif mutation_mode == 5:
-        del_add_mutation(ind, mutation_intensity, src)
-        mutate_point_position(ind, mutation_intensity, src)
+        del_add_mutation(mutated, mutation_intensity, src)
+        mutate_point_position(mutated, mutation_intensity, src)
     else:
-        del_add_mutation(ind, mutation_intensity, src)
-        mutate_point_position(ind, mutation_intensity, src)
-        mutate_colors(ind, mutation_intensity)
-    ind[3] = evaluate_fitness(ind, src)
-    print(evaluate_fitness(ind, src))
-    return ind
+        del_add_mutation(mutated, mutation_intensity, src)
+        mutate_point_position(mutated, mutation_intensity, src)
+        mutate_colors(mutated, mutation_intensity)
+    mutated[3] = evaluate_fitness(mutated, src)
+    return mutated
 
 
 def mutate_colors(ind, mutation_intensity):
