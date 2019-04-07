@@ -1,4 +1,3 @@
-import logging
 import os
 import time
 from copy import deepcopy
@@ -10,7 +9,7 @@ from numpy import argwhere, zeros, uint8, full, arange, concatenate, empty, ndar
 from numpy.random import exponential, randint, normal, choice
 from scipy.spatial import Delaunay
 from scipy.spatial import distance
-from multiprocessing import Pool, get_logger, log_to_stderr
+from multiprocessing import Pool
 import cv2
 
 SIZE = 512
@@ -18,15 +17,15 @@ POPULATION_SIZE = 30
 F_SIZE = 64
 
 KERNEL_SIZE = 3
-THRESHOLD = 8
+BLACK_TRESHOLD = 8
 MAX_BLACK = 255
 
-EDGE_COUNT_PENALTY = 8
+SIZE_PENALTY = 1 / 4
 
 MAX_POINT_FACTOR = 1 / 8
 MIN_POINT_COUNT = 4
 COLOR_DRIFT = 3
-POINT_DRIFT = F_SIZE / 16
+POINT_DRIFT = F_SIZE / 8
 RANDOM_POINTS = 3
 FITNESS_STEP = 2
 
@@ -105,7 +104,9 @@ def calculate_colors(mesh, triangles, src, drift):
 
 
 def draw_square(mesh, triangles, colors, fitness):
-    square = empty([F_SIZE, F_SIZE, 3], dtype=uint8)
+    square = zeros([F_SIZE, F_SIZE, 3], dtype=uint8)
+    if len(triangles) != len(colors):
+        raise AssertionError("SHTF")
     for x in range(len(triangles)):
         cv2.drawContours(square, array([mesh[triangles[x]]]), -1, colors[x].tolist(), thickness=cv2.FILLED)
     return square
@@ -117,11 +118,14 @@ def crossover(ind_one, ind_two, src):
 
     crossover_mode = int(clip(int(exponential(1 / MODE_LAMBDA)), 0, 3))
     crossover_intensity = int(clip(int(exponential(1 / INTENSITY_LAMBDA) * 2), 1, 4))
-    if crossover_mode == 0:
+    if crossover_mode == 0 or True:
+        pass
         exchange_colors(child_one, child_two, crossover_intensity)
     elif crossover_mode == 1:
+        pass
         exchange_points(child_one, child_two, src, crossover_intensity)
     else:
+        pass
         exchange_colors(child_one, child_two, crossover_intensity)
         exchange_points(child_one, child_two, src, crossover_intensity)
     child_one[3] = evaluate_fitness(child_one, src)
@@ -130,8 +134,9 @@ def crossover(ind_one, ind_two, src):
 
 
 def exchange_colors(ind_one, ind_two, crossover_intensity):
-    loci = choice(arange(min(len(ind_one[0]), len(ind_two))), size=crossover_intensity)
-    ind_one[0][loci], ind_two[0][loci] = ind_two[0][loci], ind_one[0][loci]
+    min_length = min(len(ind_one[2]), len(ind_two[2]))
+    loci = choice(arange(min_length), min_length, replace=False)
+    ind_one[2][loci], ind_two[2][loci] = ind_two[2][loci], ind_one[2][loci]
 
 
 def exchange_points(ind_one, ind_two, src, crossover_intensity):
@@ -144,7 +149,7 @@ def exchange_points(ind_one, ind_two, src, crossover_intensity):
     ind_one[0], ind_two[0] = (shorter, longer) if len(ind_one[0]) < len(ind_two[0]) else (longer, shorter)
 
     ind_one[0] = ndarray.astype(ind_one[0], dtype=int32)
-    ind_two[0] = ndarray.astype(ind_one[0], dtype=int32)
+    ind_two[0] = ndarray.astype(ind_two[0], dtype=int32)
 
     ind_one[1] = triangulate(ind_one[0])
     ind_one[2] = calculate_colors(ind_one[0], ind_one[1], src, zeros([3]))
@@ -187,28 +192,32 @@ def mutate_colors(ind, mutation_intensity):
     ind[2][loci] = ind[2][loci] + \
                    clip((normal(0, 1, [mutation_intensity, 3]) * 2), -COLOR_DRIFT, COLOR_DRIFT).astype(dtype=int8)
     ind[2] = clip(ind[2], 0, 255)
+    return ind
 
 
 def mutate_point_position(ind, mutation_intensity, src):
-    mutation_intensity = min(len(ind[0]), mutation_intensity)
-    loci = choice(len(ind[0]), mutation_intensity, False)
+    mutation_intensity = min(len(ind[0]) - 4, mutation_intensity)
+    loci = choice(len(ind[0]) - 4, mutation_intensity, False)
     ind[0][loci] = ind[0][loci] + \
                    ndarray.astype(clip((normal(0, 2, [mutation_intensity, 2]) * 2), -POINT_DRIFT, POINT_DRIFT),
                                   dtype=int8)
     ind[0][loci] = clip(ind[0][loci], 0, F_SIZE - 1)
     ind[1] = triangulate(ind[0])
     ind[2] = calculate_colors(ind[0], ind[1], src, zeros([3]))
+    return ind
 
 
 def del_add_mutation(ind, mutation_intensity, src):
-    is_del = randint(0, 2)
-    if is_del == 1 and len(ind[2]) - mutation_intensity > 4:
-        loci = choice(len(ind[0] - 5), len(ind[0]) - mutation_intensity, False)
+    is_del = randint(1, 3)
+    if is_del != 1 and len(ind[0]) - mutation_intensity > 4:
+        loci = concatenate([choice(len(ind[0]) - 4, len(ind[0]) - 4 - mutation_intensity, replace=False),
+                            arange(len(ind[0]) - 4, len(ind[0]))])
         ind[0] = ind[0][loci]
     else:
         ind[0] = concatenate([randint(0, F_SIZE, [mutation_intensity, 2]), ind[0]])
     ind[1] = triangulate(ind[0])
     ind[2] = calculate_colors(ind[0], ind[1], src, zeros([3]))
+    return ind
 
 
 def approximate_square(source, mask, x, y):
@@ -216,8 +225,8 @@ def approximate_square(source, mask, x, y):
     population = population[population[:, 3].argsort()[::-1]]
     fitness = population[POPULATION_SIZE - 1][3]
     counter = 0
-    print("Generation {}, fitness {}, thread {}, point {}, {}".format(counter, fitness, os.getpid(), x ,y))
-    while fitness > 400:
+    print("Generation {}, fitness {}, thread {}, point {}, {}".format(counter, fitness, os.getpid(), x, y))
+    while fitness > 20 and counter < 100:
         counter += 1
         breeding = population[POPULATION_SIZE - CROSSOVER_COUNT: POPULATION_SIZE - 1]
 
@@ -234,9 +243,15 @@ def approximate_square(source, mask, x, y):
         population = population[population[:, 3].argsort()[::-1]]
         population = population[len(population) - POPULATION_SIZE:]
         fitness = population[POPULATION_SIZE - 1][3]
-        print("Generation {}, fitness {}, thread {}, point {}, {}".format(counter, fitness, os.getpid(), x ,y))
+        print("Generation {}, fitness {}, thread {}, point {}, {}".format(counter, fitness, os.getpid(), x, y))
     super_hero = population[POPULATION_SIZE - 1]
-    save("./pic/square_{}_{}".format(x, y), draw_square(*super_hero))
+    arr = draw_square(*super_hero)
+    f = open("./pic/square_{}_{}.npy".format(x, y), "wb", buffering=0)
+    save(f, arr)
+    f.flush()
+    os.fsync(f)
+    f.close()
+    return
 
 
 def evaluate_fitness(tgt, src):
@@ -245,7 +260,7 @@ def evaluate_fitness(tgt, src):
     for x in range(0, F_SIZE, FITNESS_STEP):
         for y in range(0, F_SIZE, FITNESS_STEP):
             fit += abs(distance.euclidean(square[x, y], src[x, y]))
-    return fit / (F_SIZE ** 2)
+    return fit / (F_SIZE ** 2) + SIZE_PENALTY * len([tgt[0]])
 
 
 if __name__ == '__main__':
@@ -253,22 +268,15 @@ if __name__ == '__main__':
     # gray = cv2.GaussianBlur(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (KERNEL_SIZE, KERNEL_SIZE), 0)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    ret, laplacian = cv2.threshold(cv2.Laplacian(gray, cv2.CV_8U), THRESHOLD, MAX_BLACK, cv2.THRESH_BINARY)
+    ret, laplacian = cv2.threshold(cv2.Laplacian(gray, cv2.CV_8U), BLACK_TRESHOLD, MAX_BLACK, cv2.THRESH_BINARY)
     sobely = cv2.Sobel(gray, cv2.CV_8U, 1, 1, ksize=5)
 
     t1 = time.time()
     img2 = empty([SIZE, SIZE, 3], dtype=uint8)
 
-    log_to_stderr()
-
-    logger = get_logger()
-    logger.setLevel(logging.INFO)
-
-    # lock = Lock()
-
-    with Pool(8) as p:
+    with Pool(8, maxtasksperchild=1) as p:
         time.sleep(1)
-        for x in range(int(SIZE / F_SIZE)):
+        for x in range(0, 3):
             for y in range(int(SIZE / F_SIZE)):
                 a = p.apply_async(approximate_square,
                                   (img[x * F_SIZE: (x + 1) * F_SIZE, y * F_SIZE: (y + 1) * F_SIZE],
@@ -278,8 +286,11 @@ if __name__ == '__main__':
 
     for x in range(int(SIZE / F_SIZE)):
         for y in range(int(SIZE / F_SIZE)):
-            img2[x * F_SIZE: (x + 1) * F_SIZE, y * F_SIZE: (y + 1) * F_SIZE] = load(
-                "./pic/square_{}_{}.npy".format(x, y))
+            try:
+                img2[x * F_SIZE: (x + 1) * F_SIZE, y * F_SIZE: (y + 1) * F_SIZE] = load(
+                    "./pic/square_{}_{}.npy".format(x, y))
+            except:
+                pass
 
     cv2.imshow("first_img", img)
     cv2.imshow("second_img", img2)
