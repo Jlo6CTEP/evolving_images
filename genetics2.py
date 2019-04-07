@@ -26,10 +26,12 @@ RADIUS = 4
 
 SQUARE_SIZE = int(ceil(RADIUS * 2 ** 1 / 2))
 
-DOT_COUNT = 40000
+DOT_COUNT = 4000
 ITERATION_COUNT = 10
 MUTATION_COUNT = int(POPULATION_SIZE / 3)
 CROSSOVER_COUNT = int(POPULATION_SIZE / 2)
+
+temp = empty([SIZE, SIZE, 3], dtype=uint8)
 
 
 @jit()
@@ -127,12 +129,8 @@ def cross_points(ind_one, ind_two, intensity):
 
 
 @jit()
-def evaluate(src, tgt, number):
-    print("Process #{} started".format(number))
-    counter = 0
+def evaluate(src, tgt):
     for x in range(int(DOT_COUNT)):
-        print(x)
-        counter += 1
         pop = generate_population(src)
         pop = pop[pop[:, 2].argsort()[::-1]]
         for y in range(ITERATION_COUNT):
@@ -144,6 +142,8 @@ def evaluate(src, tgt, number):
                 pop[f] = mutate(pop[f], src)
             pop = pop[pop[:, 2].argsort()[::-1]]
         draw_individual(tgt, pop[POPULATION_SIZE - 1])
+        if x % 100 == 0:
+            print(x)
 
 
 if __name__ == '__main__':
@@ -151,13 +151,14 @@ if __name__ == '__main__':
     img_src[SQUARE_SIZE: SQUARE_SIZE + SIZE, SQUARE_SIZE: SQUARE_SIZE + SIZE] = \
         cv2.resize(cv2.imread(PICTURE), (SIZE, SIZE), interpolation=cv2.INTER_NEAREST)
 
-    dst = zeros([SIZE + SQUARE_SIZE, SIZE + SQUARE_SIZE, 3], dtype=uint8)
+    dst = full([SIZE + SQUARE_SIZE, SIZE + SQUARE_SIZE, 3], 0, dtype=uint8)
 
     t1 = time.time()
+
+    evaluate(img_src, dst)
 
     cv2.imshow("source", img_src)
     cv2.imshow("result", dst)
     cv2.imwrite("tor gvalchca.png", dst)
     print("Work time is {}".format(time.time() - t1))
     cv2.waitKey()
-
