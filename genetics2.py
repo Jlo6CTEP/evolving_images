@@ -1,22 +1,18 @@
 import time
 from copy import deepcopy
-from multiprocessing import Process
-from multiprocessing.pool import Pool
 
 import cv2
 import numpy as np
-from numpy import argwhere, zeros, full, arange, concatenate, ndarray, array, clip, int32, int8, int16, save, empty, \
-    uint8, ceil
-
-from numpy.random import exponential, randint, normal, choice
 from numba import jit
-from numba.types import uintp
+from numpy import zeros, full, ndarray, clip, int8, int16, empty, uint8, ceil
+from numpy.random import randint, normal, choice
 
-PICTURE = "./picture/Tower2.jpg"
+PICTURE = "./picture/me262.jpg"
 SIZE = 512
 
 COLOR_DRIFT = 30
 POINT_DRIFT = 40
+
 
 INTENSITY_LAMBDA = 0.5
 INTENSITY_MULT = 4
@@ -24,9 +20,9 @@ INTENSITY_MULT = 4
 POPULATION_SIZE = 40
 RADIUS = 4
 
-SQUARE_SIZE = int(ceil(RADIUS * 2 ** 1 / 2))
+SQUARE_SIZE = int(ceil(RADIUS * 2 ** 1 / 4))
 
-DOT_COUNT = 4000
+DOT_COUNT = 40000
 ITERATION_COUNT = 10
 MUTATION_COUNT = int(POPULATION_SIZE / 3)
 CROSSOVER_COUNT = int(POPULATION_SIZE / 2)
@@ -151,7 +147,7 @@ if __name__ == '__main__':
     img_src[SQUARE_SIZE: SQUARE_SIZE + SIZE, SQUARE_SIZE: SQUARE_SIZE + SIZE] = \
         cv2.resize(cv2.imread(PICTURE), (SIZE, SIZE), interpolation=cv2.INTER_NEAREST)
 
-    dst = full([SIZE + SQUARE_SIZE, SIZE + SQUARE_SIZE, 3], 0, dtype=uint8)
+    dst = full([SIZE + SQUARE_SIZE, SIZE + SQUARE_SIZE, 3], 255, dtype=uint8)
 
     t1 = time.time()
 
@@ -159,6 +155,6 @@ if __name__ == '__main__':
 
     cv2.imshow("source", img_src)
     cv2.imshow("result", dst)
-    cv2.imwrite("tor gvalchca.png", dst)
+    cv2.imwrite("me262.png", dst)
     print("Work time is {}".format(time.time() - t1))
     cv2.waitKey()
